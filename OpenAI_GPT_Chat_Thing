@@ -1,0 +1,128 @@
+import os
+import ast
+import openai
+from PyQt5 import QtWidgets, QtGui
+
+class OpenAIApplication(QtWidgets.QTabWidget):
+    def __init__(self):
+        super().__init__()
+
+        # Read the API key from the environment variable
+        openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+        # List the available models
+        self.models = openai.Model.list()
+
+        # Create the model list tab
+        self.model_list_tab = QtWidgets.QWidget()
+        model_list = QtWidgets.QListWidget()
+        model_list.addItems([model.id for model in self.models['data']])
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(model_list)
+        self.model_list_tab.setLayout(layout)
+
+        # Create the input/output tab
+        self.input_output_tab = QtWidgets.QWidget()
+        self.model_name_label = QtWidgets.QLabel("No model selected")
+        message_input = QtWidgets.QTextEdit()
+        send_button = QtWidgets.QPushButton("Send")
+        send_button.clicked.connect(lambda: self.send_message(message_input, response_output))
+
+        response_output = QtWidgets.QTextEdit()
+        response_output.setReadOnly(True)
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.model_name_label)
+        layout.addWidget(message_input)
+        layout.addWidget(send_button)
+        layout.addWidget(response_output)
+        self.input_output_tab.setLayout(layout)
+
+        # Create the input tab
+        self.input_tab = QtWidgets.QWidget()
+        input_label = QtWidgets.QLabel("Enter the compressed code:")
+        self.input_text = QtWidgets.QTextEdit()
+        input_decompress_button = QtWidgets.QPushButton("Decompress")
+        input_decompress_button.clicked.connect(self.decompress_code)
+        input_layout = QtWidgets.QVBoxLayout()
+        input_layout.addWidget(input_label)
+        input_layout.addWidget(self.input_text)
+        input_layout.addWidget(input_decompress_button)
+        self.input_tab.setLayout(input_layout)
+
+        # Create the output tab
+        self.output_tab = QtWidgets.QWidget()
+        output_label = QtWidgets.QLabel("Decompressed code:")
+        self.output_text = QtWidgets.QTextEdit()
+        self.output_text.setReadOnly(True)
+        output_layout = QtWidgets.QVBoxLayout()
+        output_layout.addWidget(output_label)
+        output_layout.addWidget(self.output_text)
+        self.output_tab.setLayout(output_layout)
+
+        # Add the tabs
+        self.addTab(self.model_list_tab, "Models")
+        self.addTab(self.input_output_tab, "Input/Output")
+        self.addTab(self.input_tab, "Input")
+        self.addTab(self.output_tab, "Output")
+
+        # Set the window title
+        self.setWindowTitle("OPENAI")
+
+        # Resize the window
+        self.resize(800, 600)
+
+    def send_message(self, message_input, response_output):
+        # Get the selected model
+        selected_model = self.model_list_tab.findChild(QtWidgets.QListWidget).currentItem().text()
+        response_output.setPlainText("# Prompt: " + message_input.toPlainText())
+
+        # Update the model name label and window title
+        self.model_name_label.setText("Selected model: " + selected_model)
+        self.setWindowTitle("OPENAI - " + selected_model)
+
+        try:
+            # Send the message to the selected model
+            response = openai.Completion.create(
+                engine=selected_model,
+                prompt=message_input.toPlainText(),
+                max_tokens=1024,
+                n=1,
+                stop=None,
+                temperature=0.5,
+            )
+
+            # Display the response in the response output
+            response_output.setPlainText(response['choices'][0]['text'])
+
+        # except RateLimitError:
+        #     # Display an error message to the user
+        #     response_output.setText(
+        #         "Sorry, you have exceeded your current quota. Please check your plan and billing details.")
+
+        except Exception as e:
+            # Display a generic error message to the user
+            response_output.setText("An error occurred: " + str(e))
+
+    def decompress_code(self):
+        # Get the input code
+        input_code = self.input_text.toPlainText()
+
+        # Decompress the code
+        decompressed_code = self.format_code(input_code)
+
+        #tree = ast.parse(input_code)
+        #decompressed_code = ast.dump(tree)
+
+        # Display the decompressed code in the output text field
+        self.output_text.setPlainText(decompressed_code)
+
+
+    def format_code(self, code):
+        parsed_code = ast.parse(code)
+        return ast.unparse(parsed_code)
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication([])
+    window = OpenAIApplication()
+    window.show()
+    app.exec_()
